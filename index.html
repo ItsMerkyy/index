@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Generator</title>
+</head>
+<body>
+    <h1>Code Generator</h1>
+    <label for="webhook">Your Webhook:</label>
+    <input type="text" id="webhook" placeholder="Enter your webhook URL">
+    <button onclick="startGenerating()">Start Generating</button>
+    <button onclick="stopGenerating()">Stop Generating</button>
+    <p id="status">Status: Idle</p>
+
+    <script>
+        const maxAttempts = 1000;
+        let attempts = 0;
+        let generateInterval = null;
+
+        function generateRandomString(length = 16) {
+            const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let result = '';
+            for (let i = 0; i < length; i++) {
+                result += characters.charAt(Math.floor(Math.random() * characters.length));
+            }
+            return result;
+        }
+
+        async function checkCode(code) {
+            const url = `https://your-proxy-server/check-code/${code}`;
+            try {
+                const response = await fetch(url);
+                return response.ok;
+            } catch (error) {
+                console.error('Error fetching code:', error);
+                return false;
+            }
+        }
+
+        async function notifyDiscord(message, webhookUrl) {
+            const payload = {
+                content: message
+            };
+            try {
+                const response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (response.ok) {
+                    console.log('Message successfully sent to Discord.');
+                } else {
+                    console.error('Failed to send message to Discord. Status code:', response.status);
+                }
+            } catch (error) {
+                console.error('Failed to send message to Discord:', error);
+            }
+        }
+
+        async function startGenerating() {
+            const webhookUrl = document.getElementById('webhook').value.trim();
+            if (!webhookUrl) {
+                alert('Please enter your webhook URL.');
+                return;
+            }
+
+            attempts = 0;
+            document.getElementById('status').innerText = 'Status: Generating...';
+
+            // Notify Discord that the generator has been triggered
+            notifyDiscord('Generator triggered', webhookUrl);
+
+            generateInterval = setInterval(async () => {
+                const code = generateRandomString();
+                const isValid = await checkCode(code);
+                attempts++;
+
+                if (isValid) {
+                    notifyDiscord(`Valid code found: ${code}`, webhookUrl);
+                    document.getElementById('status').innerText = `Status: Valid code found - ${code}`;
+                    clearInterval(generateInterval);
+                } else {
+                    document.getElementById('status').innerText = `Status: Invalid code - ${code}`;
+                }
+
+                if (attempts >= maxAttempts) {
+                    clearInterval(generateInterval);
+                    document.getElementById('status').innerText = 'Status: Maximum attempts reached. No valid code found.';
+                }
+            }, 1000); // Generate a new code every second
+        }
+
+        function stopGenerating() {
+            clearInterval(generateInterval);
+            const webhookUrl = document.getElementById('webhook').value.trim();
+            document.getElementById('status').innerText = 'Status: Stopped';
+            // Notify Discord that the generator has been stopped
+            if (webhookUrl) {
+                notifyDiscord('Generator stopped', webhookUrl);
+            }
+        }
+    </script>
+</body>
+</html>
